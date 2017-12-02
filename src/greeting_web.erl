@@ -25,46 +25,22 @@ stop() ->
 loop(Req, DocRoot) ->
 		"/" ++ Path = Req:get(path),
 	try
-		case Req:get(method) of
-			Method when Method =:= 'GET'; Method =:= 'HEAD' ->
 
-				case Path of
+		case dispatch(Req, greeting_views:urls()) of
 
-					"hello_world" ->
-						Req:respond({200, [{"Content-Type", "text/plain"}], "Hello world!\n"});
-
-					"hello" ->
-						QueryStringData = Req:parse_qs(),
-						Username = proplists:get_value("username", QueryStringData, "unknown"),
-						Req:respond({200, [{"Content-Type", "text/plain"}], "Hello " ++ Username ++ "!\n"});
-
-					"helloT" ->
-						QueryStringData = Req:parse_qs(),
-						Username = proplists:get_value("username", QueryStringData, "unknown"),
-						{ok, HTMLOutput} = greeting_dtl:render([{username, Username}]),
-						Req:respond({200, [{"Content-Type", "text/html"}], HTMLOutput});
-
-					_ ->
-						Req:serve_file(Path, DocRoot)
-
-				end;
-
-			'POST' ->
-
-				case Path of
-
-					"helloT" ->
-						PostData = Req:parse_post(),
-						Username = proplists:get_value("username", PostData, "unknown"),
-						{ok, HTMLOutput} = greeting_dtl:render([{username, Username}]),
-						Req:respond({200, [{"Content-Type", "text/html"}], HTMLOutput});
-
-					_ ->
+			none ->
+				% No request handler found
+				case filelib:is_file(filename:join([DocRoot, Path])) of
+					true ->
+						% If there's a static file, serve it
+						Req:serve_file(Path, DocRoot);
+					false ->
+						% Otherwise the page is not found
 						Req:not_found()
 				end;
 
-			_ ->
-				Req:respond({501, [], []})
+			Response ->
+				Response
 
 		end
 
@@ -79,6 +55,31 @@ loop(Req, DocRoot) ->
 			],
 			error_logger:error_report(Report),
 			Req:respond({500, [{"Content-Type", "text/plain"}], "request failed, sorry\n"})
+	end.
+
+% Iterate recursively on our list of {Regexp, Function} tuples
+
+dispatch(_, []) ->
+	none;
+
+dispatch(Req, [{Regexp, Function} | T]) ->
+		"/" ++ Path = Req:get(path),
+	Method = Req:get(method),
+	Match = re:run(Path, Regexp, [global, {capture, all_but_first, list}]),
+	case Match of
+		{match, [MatchList]} ->
+			% We found a regexp that matches the current URL path
+			case length(MatchList) of
+				0 ->
+					% We didn't capture any URL parameters
+					greeting_views:Function(Method, Req);
+				Length when Length > 0 ->
+					% We pass URL parameters we captured to the function
+					Args = lists:append([[Method, Req], MatchList]),
+					apply(greeting_views, Function, Args)
+			end;
+		_ ->
+			dispatch(Req, T)
 	end.
 
 %% Internal API
