@@ -52,6 +52,13 @@ loop(Req, DocRoot) ->
 			'POST' ->
 
 				case Path of
+
+					"helloT" ->
+						PostData = Req:parse_post(),
+						Username = proplists:get_value("username", PostData, "unknown"),
+						{ok, HTMLOutput} = greeting_dtl:render([{username, Username}]),
+						Req:respond({200, [{"Content-Type", "text/html"}], HTMLOutput});
+
 					_ ->
 						Req:not_found()
 				end;
