@@ -38,6 +38,12 @@ loop(Req, DocRoot) ->
 						Username = proplists:get_value("username", QueryStringData, "unknown"),
 						Req:respond({200, [{"Content-Type", "text/plain"}], "Hello " ++ Username ++ "!\n"});
 
+					"helloT" ->
+						QueryStringData = Req:parse_qs(),
+						Username = proplists:get_value("username", QueryStringData, "Anonymous"),
+						{ok, HTMLOutput} = greeting_dtl:render([{username, Username}]),
+						Req:respond({200, [{"Content-Type", "text/html"}], HTMLOutput});
+
 					_ ->
 						Req:serve_file(Path, DocRoot)
 
